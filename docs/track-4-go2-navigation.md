@@ -45,12 +45,19 @@ Build a driver for the Unitree Go2 EDU quadruped robot that enables LLM-controll
 
 | Action | Parameters | Expected Behavior |
 |--------|-----------|-------------------|
+| `semantic_navigate` | `robot_id, target_ref, goal_pose, approach_distance, timeout_s` | Walk to a semantic target resolved from `scene_graph` |
 | `move_to` | `x, y` (metres, map frame) | Walk to target position, avoid obstacles |
 | `turn_to` | `heading: float` (degrees) | Rotate in place to target heading |
 | `follow_path` | `waypoints: list of x,y` | Follow a sequence of waypoints |
 | `stop` | — | Halt immediately |
 | `sit` | — | Transition to sitting posture |
 | `stand` | — | Transition to standing posture |
+
+### Semantic Navigation Notes
+
+- Agent-side target resolution happens in OEA tools, not inside the driver.
+- The driver accepts concrete `goal_pose` and `target_ref` data from `ACTION.md`.
+- Runtime state should be written back under `robots.<robot_id>.nav_state`.
 
 ### Navigation Feedback in ENVIRONMENT.md
 

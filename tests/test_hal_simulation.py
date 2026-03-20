@@ -56,7 +56,7 @@ def _make_action_md(tmp_path: Path, action: dict) -> Path:
 # Add repo root to sys.path so we can import hal.*
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from hal.simulation.scene_io import load_scene_from_md, save_scene_to_md
+from hal.simulation.scene_io import load_environment_doc, load_scene_from_md, save_scene_to_md
 
 
 class TestSceneIO:
@@ -97,6 +97,40 @@ class TestSceneIO:
         save_scene_to_md(p, scene)
         loaded = load_scene_from_md(p)
         assert loaded == scene
+
+    def test_load_v1_structured_environment_returns_objects(self, tmp_path):
+        p = tmp_path / "ENVIRONMENT.md"
+        payload = {
+            "schema_version": "oea.environment.v1",
+            "scene_graph": {"nodes": [], "edges": []},
+            "robots": {
+                "go2_edu_001": {
+                    "robot_pose": {"x": 1.0, "y": 2.0, "z": 0.0, "yaw": 0.0, "frame": "map"},
+                    "nav_state": {"mode": "idle", "status": "idle"},
+                }
+            },
+            "objects": {
+                "apple": {"position": {"x": 5, "y": 5, "z": 0}, "location": "table"}
+            },
+        }
+        p.write_text(
+            "# Environment State\n\n"
+            f"{_FENCE_OPEN}\n{json.dumps(payload, indent=2)}\n{_FENCE_CLOSE}\n",
+            encoding="utf-8",
+        )
+
+        loaded = load_scene_from_md(p)
+        assert "apple" in loaded
+        assert loaded["apple"]["location"] == "table"
+
+    def test_save_scene_writes_v1_envelope(self, tmp_path):
+        p = tmp_path / "ENVIRONMENT.md"
+        scene = {"apple": {"position": {"x": 0, "y": 0, "z": 0}, "location": "table"}}
+        save_scene_to_md(p, scene)
+        doc = load_environment_doc(p)
+        assert doc.get("schema_version") == "oea.environment.v1"
+        assert "objects" in doc
+        assert "apple" in doc["objects"]
 
     def test_save_creates_human_readable_header(self, tmp_path):
         p = tmp_path / "ENVIRONMENT.md"
@@ -278,6 +312,45 @@ class TestWatchdogPollLoop:
 
         updated = load_scene_from_md(env_file)
         assert updated["apple"]["location"] == "held"
+
+    def test_poll_preserves_existing_robots_partition(self, tmp_path):
+        from hal.simulation.pybullet_sim import PyBulletSimulator
+        from hal.hal_watchdog import _poll_once
+
+        env_file = tmp_path / "ENVIRONMENT.md"
+        initial = {
+            "schema_version": "oea.environment.v1",
+            "scene_graph": {"nodes": [], "edges": []},
+            "robots": {
+                "go2_edu_001": {
+                    "robot_pose": {"frame": "map", "x": 1.0, "y": 2.0, "z": 0.0, "yaw": 0.0},
+                    "nav_state": {"mode": "navigating", "status": "running"},
+                }
+            },
+            "objects": {
+                "apple": {"type": "fruit", "position": {"x": 5, "y": 5, "z": 0}}
+            },
+        }
+        env_file.write_text(
+            "# Environment State\n\n"
+            f"{_FENCE_OPEN}\n{json.dumps(initial, indent=2)}\n{_FENCE_CLOSE}\n",
+            encoding="utf-8",
+        )
+
+        action_file = _make_action_md(tmp_path, {
+            "action_type": "point_to",
+            "parameters": {"target": "apple"},
+            "status": "pending",
+        })
+
+        with PyBulletSimulator(gui=False) as sim:
+            sim.load_scene(initial["objects"])
+            _poll_once(sim, action_file, env_file)
+
+        doc = load_environment_doc(env_file)
+        assert "robots" in doc
+        assert "go2_edu_001" in doc["robots"]
+        assert doc["robots"]["go2_edu_001"]["nav_state"]["status"] == "running"
 
     def test_poll_skips_invalid_json_block(self, tmp_path):
         from hal.simulation.pybullet_sim import PyBulletSimulator

@@ -6,7 +6,7 @@
     <a href="./README.md">English</a> | <a href="./README_zh.md">中文</a>
   </p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.0.1-blue" alt="Version">
+    <img src="https://img.shields.io/badge/version-0.0.2-blue" alt="Version">
     <img src="https://img.shields.io/badge/python-≥3.11-blue" alt="Python">
     <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
   </p>
@@ -14,7 +14,7 @@
 
 🐈 **OpenEmbodiedAgent (OEA)** is an open-source embodied AI framework dedicated to lowering the barrier to entry for robotics. It abandons the dangerous black-box model of "LLMs directly controlling hardware" and pioneers the **"State-as-a-File (Everything is Markdown)"** protocol matrix. Through a **Dual-Track Multi-Agent System** (Software Brain Track A + Hardware HAL Track B), it achieves safe, interpretable, and evolvable robot control.
 
-⚡️ The current version **v0.0.1 (OEA Pioneer Edition)** is built on the ultra-lightweight `nanobot` architecture, aiming to quickly validate OEA's core protocols and workflows through a desktop-level virtual pet and simulation environment.
+⚡️ The current version **v0.0.2 (OEA Pioneer Edition)** is built on the ultra-lightweight `nanobot` architecture, aiming to quickly validate OEA's core protocols and workflows through a desktop-level virtual pet and simulation environment.
 
 ## 📢 News
 
@@ -85,7 +85,7 @@ git clone https://github.com/your-repo/OpenEmbodiedAgent.git
 cd OpenEmbodiedAgent
 pip install -e .
 # Install simulation dependencies (e.g., watchdog)
-pip install watchdog
+pip install pybullet watchdog
 ```
 
 ### 2. Initialize Workspace

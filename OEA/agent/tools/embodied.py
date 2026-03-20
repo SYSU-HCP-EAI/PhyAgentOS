@@ -1,5 +1,7 @@
 """Embodied action tool for executing robot actions with Critic validation."""
 
+from __future__ import annotations
+
 import json
 from pathlib import Path
 from typing import Any
@@ -9,7 +11,6 @@ from loguru import logger
 from OEA.agent.tools.base import Tool
 from OEA.providers.base import LLMProvider
 
-# Markdown fences kept outside f-strings to avoid backtick parse issues
 _FENCE_OPEN = "```json"
 _FENCE_CLOSE = "```"
 
@@ -24,49 +25,46 @@ class EmbodiedActionTool(Tool):
     if the validation passes.
     """
 
-    name = "execute_robot_action"
-    description = (
-        "Execute a physical action on the robot. "
-        "The action will be validated by a Critic before execution."
-    )
+    @property
+    def name(self) -> str:
+        return "execute_robot_action"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Execute a physical action on the robot. "
+            "The action will be validated by a Critic before execution."
+        )
+
+    @property
+    def parameters(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "action_type": {
+                    "type": "string",
+                    "description": (
+                        "The type of action to execute "
+                        "(e.g., 'point_to', 'move_to', 'pick_up', "
+                        "'semantic_navigate', 'localize')."
+                    ),
+                },
+                "parameters": {
+                    "type": "object",
+                    "description": "The parameters for the action.",
+                },
+                "reasoning": {
+                    "type": "string",
+                    "description": "The reasoning behind choosing this action.",
+                },
+            },
+            "required": ["action_type", "parameters", "reasoning"],
+        }
 
     def __init__(self, workspace: Path, provider: LLMProvider, model: str):
         self.workspace = workspace
         self.provider = provider
         self.model = model
-
-    def to_schema(self) -> dict[str, Any]:
-        return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": self.description,
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "action_type": {
-                            "type": "string",
-                            "description": (
-                                "The type of action to execute "
-                                "(e.g., 'point_to', 'move_to', 'pick_up')."
-                            ),
-                        },
-                        "parameters": {
-                            "type": "object",
-                            "description": (
-                                "The parameters for the action "
-                                "(e.g., {'x': 10, 'y': 20, 'z': 0})."
-                            ),
-                        },
-                        "reasoning": {
-                            "type": "string",
-                            "description": "The reasoning behind choosing this action.",
-                        },
-                    },
-                    "required": ["action_type", "parameters", "reasoning"],
-                },
-            },
-        }
 
     async def execute(
         self,
@@ -76,6 +74,7 @@ class EmbodiedActionTool(Tool):
     ) -> str:
         """Execute the action after Critic validation."""
         embodied_file = self.workspace / "EMBODIED.md"
+        environment_file = self.workspace / "ENVIRONMENT.md"
         action_file = self.workspace / "ACTION.md"
         lessons_file = self.workspace / "LESSONS.md"
 
@@ -83,26 +82,34 @@ class EmbodiedActionTool(Tool):
             return "Error: EMBODIED.md not found. Cannot validate action."
 
         embodied_content = embodied_file.read_text(encoding="utf-8")
-        params_json = json.dumps(parameters)
+        environment_content = ""
+        if environment_file.exists():
+            environment_content = environment_file.read_text(encoding="utf-8")
+        params_json = json.dumps(parameters, ensure_ascii=False)
 
-        # Construct the Critic prompt
         critic_prompt = (
             "You are the Critic Agent for a robot.\n"
             "Your job is to validate if the proposed action is safe and "
-            "physically possible based on the robot's capabilities.\n\n"
+            "physically possible based on the robot's capabilities and "
+            "the current environment state.\n\n"
             "# Robot Capabilities (EMBODIED.md)\n"
             f"{embodied_content}\n\n"
+            "# Current Environment State (ENVIRONMENT.md)\n"
+            f"{environment_content}\n\n"
             "# Proposed Action\n"
             f"Action Type: {action_type}\n"
             f"Parameters: {params_json}\n"
             f"Reasoning: {reasoning}\n\n"
-            "Evaluate the action. If it is safe and valid, respond with exactly 'VALID'.\n"
-            "If it is unsafe, out of bounds, or invalid, respond with 'INVALID: <reason>'.\n"
+            "When evaluating semantic navigation and localization actions, "
+            "verify target existence, navigation support, safe approach distance, "
+            "and whether current nav state suggests the robot can accept the task.\n"
+            "If it is safe and valid, respond with exactly 'VALID'.\n"
+            "If it is unsafe, out of bounds, or invalid, respond with "
+            "'INVALID: <reason>'.\n"
         )
 
         logger.info("Critic evaluating action: {} {}", action_type, parameters)
 
-        # Call the LLM to act as the Critic
         response = await self.provider.chat_with_retry(
             messages=[{"role": "user", "content": critic_prompt}],
             model=self.model,
@@ -112,14 +119,9 @@ class EmbodiedActionTool(Tool):
 
         if critic_result == "VALID":
             return self._accept_action(action_type, parameters, action_file)
-        else:
-            return self._reject_action(
-                action_type, parameters, reasoning, critic_result, lessons_file,
-            )
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
+        return self._reject_action(
+            action_type, parameters, reasoning, critic_result, lessons_file,
+        )
 
     @staticmethod
     def _accept_action(
@@ -135,7 +137,7 @@ class EmbodiedActionTool(Tool):
         }
         action_content = (
             _FENCE_OPEN + "\n"
-            + json.dumps(action_data, indent=2) + "\n"
+            + json.dumps(action_data, indent=2, ensure_ascii=False) + "\n"
             + _FENCE_CLOSE + "\n"
         )
         action_file.write_text(action_content, encoding="utf-8")
@@ -153,7 +155,7 @@ class EmbodiedActionTool(Tool):
     ) -> str:
         """Record a rejected action to LESSONS.md and return an error."""
         error_msg = critic_result.replace("INVALID:", "").strip()
-        params_json = json.dumps(parameters)
+        params_json = json.dumps(parameters, ensure_ascii=False)
 
         lesson_entry = (
             "\n## Failed Action Attempt\n"

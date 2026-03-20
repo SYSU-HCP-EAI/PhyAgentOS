@@ -27,6 +27,13 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from hal.simulation.scene_io import (
+    load_environment_doc,
+    load_scene_from_md,
+    merge_environment_doc,
+    save_environment_doc,
+)
+
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
@@ -63,26 +70,25 @@ _FENCE_CLOSE = "```"
 
 
 def _load_scene(path: Path) -> dict[str, dict]:
-    if not path.exists():
-        return {}
-    m = _ACTION_RE.search(path.read_text(encoding="utf-8"))
-    if not m:
-        return {}
-    try:
-        d = json.loads(m.group(1))
-        return d if isinstance(d, dict) else {}
-    except json.JSONDecodeError:
-        return {}
+    return load_scene_from_md(path)
 
 
-def _save_scene(path: Path, scene: dict[str, dict]) -> None:
-    sj = json.dumps(scene, indent=2, ensure_ascii=False)
-    path.write_text(
-        f"# Environment Scene-Graph\n\n"
-        f"Auto-updated by HAL Watchdog.\n\n"
-        f"{_FENCE_OPEN}\n{sj}\n{_FENCE_CLOSE}\n",
-        encoding="utf-8",
+def _save_scene(driver, path: Path, scene: dict[str, dict]) -> None:
+    existing = load_environment_doc(path)
+    runtime_state = {}
+    runtime_getter = getattr(driver, "get_runtime_state", None)
+    if callable(runtime_getter):
+        runtime_state = runtime_getter() or {}
+    updated = merge_environment_doc(
+        existing,
+        objects=scene,
+        robots=runtime_state.get("robots"),
+        scene_graph=runtime_state.get("scene_graph"),
+        map_data=runtime_state.get("map"),
+        tf_data=runtime_state.get("tf"),
+        updated_at=datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
     )
+    save_environment_doc(path, updated)
 
 
 # ---------------------------------------------------------------------------
@@ -160,7 +166,7 @@ def _poll_once(driver, action_file: Path, env_file: Path) -> None:
     result = driver.execute_action(action_type, params)
     _log(f"Result: {result}")
 
-    _save_scene(env_file, driver.get_scene())
+    _save_scene(driver, env_file, driver.get_scene())
     _log("ENVIRONMENT.md updated.")
 
     action_file.write_text("", encoding="utf-8")

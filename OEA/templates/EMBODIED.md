@@ -33,3 +33,14 @@ The Critic Agent reads this file to validate whether proposed actions are safe a
 - **Max payload**: 50 g
 - **Max reach**: 15 cm from base
 - **Collision policy**: Stop immediately on contact force > 2 N
+
+## Navigation & Multi-Agent Protocol
+
+- **Environment schema**: `ENVIRONMENT.md` should use `oea.environment.v1` when possible.
+- **Per-robot state isolation**: each robot writes only its own key in `robots.<robot_id>`.
+- **Pose channel**: `robots.<robot_id>.robot_pose` is reserved for localization state.
+- **Navigation channel**: `robots.<robot_id>.nav_state` is reserved for runtime nav/task state.
+- **Scene graph node fields**: semantic navigation expects `id`, `class`, `center`, `size`, and may use `frame`, `track_id`, `last_seen_at`.
+- **Safety distance**: approach distance to obstacles and target objects should be >= 0.5 m unless task requires closer contact.
+- **Relocalization support**: if enabled by the active driver, `nav_state` may expose relocalization status and confidence.
+- **ROS2 bridge support**: navigation-capable embodiments should declare whether they expose `/cmd_vel`, `/navigate_to_pose`, and `/initialpose`.

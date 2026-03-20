@@ -146,6 +146,22 @@ This verifies that your driver correctly implements `load_scene()`, `execute_act
 }
 ```
 
+Semantic navigation actions use the same fenced JSON shape:
+
+```json
+{
+  "action_type": "semantic_navigate",
+  "parameters": {
+    "robot_id": "go2_edu_001",
+    "target_ref": {"kind": "node", "id": "furniture_fridge", "label": "fridge"},
+    "goal_pose": {"frame": "map", "x": 2.1, "y": 0.8, "yaw": 1.57},
+    "approach_distance": 0.5,
+    "timeout_s": 120
+  },
+  "status": "pending"
+}
+```
+
 ### ENVIRONMENT.md Format
 ```json
 {
@@ -156,6 +172,14 @@ This verifies that your driver correctly implements `load_scene()`, `execute_act
   }
 }
 ```
+
+Structured `oea.environment.v1` documents may also include:
+
+- `scene_graph` for semantic nodes and relations
+- `robots.<robot_id>.robot_pose` for localization state
+- `robots.<robot_id>.nav_state` for navigation task state
+- `map` for global occupancy-map metadata and semantic zones
+- `tf` for summarized transform availability
 
 All JSON is wrapped in fenced code blocks inside the Markdown file.
 
