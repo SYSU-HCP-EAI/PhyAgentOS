@@ -170,8 +170,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--workspace",
-        default=str(Path.home() / ".nanobot" / "workspace"),
-        help="Workspace directory (default: ~/.nanobot/workspace)",
+        default=str(Path.home() / ".OEA" / "workspace"),
+        help="Workspace directory (default: ~/.OEA/workspace)",
     )
     parser.add_argument("--gui", action="store_true", help="Open 3-D viewer")
     parser.add_argument(
