@@ -136,7 +136,7 @@ class TestSceneIO:
         p = tmp_path / "ENVIRONMENT.md"
         save_scene_to_md(p, {})
         content = p.read_text(encoding="utf-8")
-        assert "# Environment Scene-Graph" in content
+        assert "# Environment State" in content
 
 
 # ---------------------------------------------------------------------------
@@ -276,7 +276,7 @@ class TestWatchdogPollLoop:
         # ENVIRONMENT.md should still only contain the header (no change)
         assert load_scene_from_md(env_file) == {}
 
-    def test_poll_clears_action_after_execution(self, tmp_path):
+    def test_poll_marks_action_completed_after_execution(self, tmp_path):
         from hal.simulation.pybullet_sim import PyBulletSimulator
         from hal.hal_watchdog import _poll_once
 
@@ -292,7 +292,8 @@ class TestWatchdogPollLoop:
             sim.load_scene(scene)
             _poll_once(sim, action_file, env_file)
 
-        assert action_file.read_text(encoding="utf-8").strip() == ""
+        action_doc = json.loads(action_file.read_text(encoding="utf-8").split(_FENCE_OPEN, 1)[1].split(_FENCE_CLOSE, 1)[0])
+        assert action_doc["actions"][0]["status"] == "completed"
 
     def test_poll_updates_environment_after_pick_up(self, tmp_path):
         from hal.simulation.pybullet_sim import PyBulletSimulator
@@ -367,6 +368,82 @@ class TestWatchdogPollLoop:
 
         # ENVIRONMENT.md should be untouched
         assert env_file.stat().st_mtime == before_mtime
+
+    def test_poll_skips_non_pending_queue_items(self, tmp_path):
+        from hal.simulation.pybullet_sim import PyBulletSimulator
+        from hal.hal_watchdog import _poll_once
+
+        scene = {"apple": {"type": "fruit", "position": {"x": 5, "y": 5, "z": 0}}}
+        env_file = _make_env_md(tmp_path, scene)
+        action_file = _make_action_md(tmp_path, {
+            "schema_version": "PhyAgentOS.action_queue.v1",
+            "actions": [
+                {
+                    "id": "done1",
+                    "action_type": "pick_up",
+                    "parameters": {"target": "apple"},
+                    "status": "completed",
+                }
+            ],
+        })
+
+        with PyBulletSimulator(gui=False) as sim:
+            sim.load_scene(scene)
+            _poll_once(sim, action_file, env_file)
+
+        updated = load_scene_from_md(env_file)
+        assert updated["apple"]["position"]["x"] == 5
+        assert "completed" in action_file.read_text(encoding="utf-8")
+
+    def test_poll_executes_first_pending_queue_item_only(self, tmp_path):
+        from hal.simulation.pybullet_sim import PyBulletSimulator
+        from hal.hal_watchdog import _poll_once
+
+        scene = {"apple": {"type": "fruit", "position": {"x": 5, "y": 5, "z": 0}}}
+        env_file = _make_env_md(tmp_path, scene)
+        action_file = _make_action_md(tmp_path, {
+            "schema_version": "PhyAgentOS.action_queue.v1",
+            "actions": [
+                {
+                    "id": "act1",
+                    "action_type": "pick_up",
+                    "parameters": {"target": "apple"},
+                    "status": "pending",
+                },
+                {
+                    "id": "act2",
+                    "action_type": "point_to",
+                    "parameters": {"target": "apple"},
+                    "status": "pending",
+                },
+            ],
+        })
+
+        with PyBulletSimulator(gui=False) as sim:
+            sim.load_scene(scene)
+            _poll_once(sim, action_file, env_file)
+
+        action_doc = json.loads(action_file.read_text(encoding="utf-8").split(_FENCE_OPEN, 1)[1].split(_FENCE_CLOSE, 1)[0])
+        assert action_doc["actions"][0]["status"] == "completed"
+        assert action_doc["actions"][1]["status"] == "pending"
+
+    def test_poll_treats_missing_status_as_pending_for_compatibility(self, tmp_path):
+        from hal.simulation.pybullet_sim import PyBulletSimulator
+        from hal.hal_watchdog import _poll_once
+
+        scene = {"apple": {"type": "fruit", "position": {"x": 5, "y": 5, "z": 0}}}
+        env_file = _make_env_md(tmp_path, scene)
+        action_file = _make_action_md(tmp_path, {
+            "action_type": "pick_up",
+            "parameters": {"target": "apple"},
+        })
+
+        with PyBulletSimulator(gui=False) as sim:
+            sim.load_scene(scene)
+            _poll_once(sim, action_file, env_file)
+
+        updated = load_scene_from_md(env_file)
+        assert updated["apple"]["location"] == "held"
 
     def test_parse_action_valid(self):
         from hal.hal_watchdog import parse_action

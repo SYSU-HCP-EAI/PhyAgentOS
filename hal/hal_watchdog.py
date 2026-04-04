@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import shutil
 import sys
 import time
@@ -23,6 +22,13 @@ from hal.simulation.scene_io import (
     merge_environment_doc,
     save_environment_doc,
 )
+from PhyAgentOS.utils.action_queue import (
+    dump_action_document,
+    first_pending_action,
+    infer_terminal_status,
+    normalize_action_document,
+    parse_action_markdown,
+)
 
 
 def _log(msg: str) -> None:
@@ -30,18 +36,19 @@ def _log(msg: str) -> None:
     print(f"[HAL Watchdog {ts}] {msg}", flush=True)
 
 
-_ACTION_RE = re.compile(r"```json\s*\n(.*?)\n```", re.DOTALL)
-
-
 def parse_action(content: str) -> dict | None:
-    """Extract the first JSON code block from ACTION.md content."""
-    match = _ACTION_RE.search(content)
-    if not match:
+    """Extract the first pending action from ACTION.md content."""
+    payload = parse_action_markdown(content)
+    if payload is None:
         return None
-    try:
-        return json.loads(match.group(1))
-    except json.JSONDecodeError:
+    document = normalize_action_document(payload)
+    if document is None:
         return None
+    pending = first_pending_action(document)
+    if pending is None:
+        return None
+    _, action = pending
+    return action
 
 
 def _load_scene(path: Path) -> dict[str, dict]:
@@ -180,10 +187,19 @@ def _poll_once(driver, action_file: Path, env_file: Path, registry=None) -> None
     if not content:
         return
 
-    action = parse_action(content)
-    if action is None:
+    payload = parse_action_markdown(content)
+    if payload is None:
         _log("ACTION.md has content but no valid JSON - skipping.")
         return
+    document = normalize_action_document(payload)
+    if document is None:
+        _log("ACTION.md contains unreadable action data - skipping.")
+        return
+    pending = first_pending_action(document)
+    if pending is None:
+        _log("ACTION.md has no pending actions - skipping.")
+        return
+    action_index, action = pending
 
     action_type = action.get("action_type", "unknown")
     params = action.get("parameters", {})
@@ -197,8 +213,10 @@ def _poll_once(driver, action_file: Path, env_file: Path, registry=None) -> None
     _save_scene(driver, env_file, driver.get_scene(), registry=registry)
     _log("ENVIRONMENT.md updated.")
 
-    action_file.write_text("", encoding="utf-8")
-    _log("ACTION.md cleared.\n")
+    document["actions"][action_index]["status"] = infer_terminal_status(result)
+    document["actions"][action_index]["result"] = result
+    action_file.write_text(dump_action_document(document), encoding="utf-8")
+    _log("ACTION.md updated.\n")
 
 
 def main() -> None:

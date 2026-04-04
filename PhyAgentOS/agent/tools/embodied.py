@@ -15,12 +15,17 @@ except ImportError:  # pragma: no cover - fallback for lightweight test envs
 from PhyAgentOS.agent.tools.base import Tool
 from PhyAgentOS.embodiment_registry import EmbodimentRegistry
 from PhyAgentOS.providers.base import LLMProvider
+from PhyAgentOS.utils.action_queue import (
+    append_action,
+    dump_action_document,
+    empty_action_document,
+    normalize_action_document,
+    parse_action_markdown,
+    pending_action_type,
+)
 
 if TYPE_CHECKING:
     from PhyAgentOS.embodiment_registry import EmbodimentRegistry
-
-_FENCE_OPEN = "```json"
-_FENCE_CLOSE = "```"
 
 
 class EmbodiedActionTool(Tool):
@@ -151,44 +156,37 @@ class EmbodiedActionTool(Tool):
     @staticmethod
     def _accept_action(action_type: str, parameters: dict[str, Any], action_file: Path) -> str:
         """Write validated action to ACTION.md."""
-        existing_action = EmbodiedActionTool._pending_action_type(action_file)
+        document = EmbodiedActionTool._load_action_document(action_file)
+        if document is None:
+            return (
+                "Error: ACTION.md contains unreadable content. "
+                "Please repair it before dispatching another action."
+            )
+        existing_action = pending_action_type(document)
         if existing_action is not None:
             return (
                 f"Error: ACTION.md already contains pending action '{existing_action}'. "
                 "Wait for the watchdog to consume it before dispatching another action."
             )
-        action_data = {
-            "action_type": action_type,
-            "parameters": parameters,
-            "status": "pending",
-        }
+        action_data = append_action(document, action_type=action_type, parameters=parameters)
         action_file.parent.mkdir(parents=True, exist_ok=True)
-        action_content = (
-            _FENCE_OPEN + "\n"
-            + json.dumps(action_data, indent=2, ensure_ascii=False) + "\n"
-            + _FENCE_CLOSE + "\n"
-        )
+        action_content = dump_action_document(action_data)
         action_file.write_text(action_content, encoding="utf-8")
 
         logger.info("Action validated and written to {}: {}", action_file, action_type)
         return f"Action '{action_type}' validated and dispatched to hardware."
 
     @staticmethod
-    def _pending_action_type(action_file: Path) -> str | None:
+    def _load_action_document(action_file: Path) -> dict[str, Any] | None:
         if not action_file.exists():
-            return None
+            return empty_action_document()
         content = action_file.read_text(encoding="utf-8").strip()
         if not content:
+            return empty_action_document()
+        payload = parse_action_markdown(content)
+        if payload is None:
             return None
-        try:
-            _, json_block = content.split(_FENCE_OPEN, 1)
-            json_block, _ = json_block.split(_FENCE_CLOSE, 1)
-            payload = json.loads(json_block)
-        except (ValueError, json.JSONDecodeError):
-            return "unknown"
-        if not isinstance(payload, dict):
-            return "unknown"
-        return str(payload.get("action_type") or "unknown")
+        return normalize_action_document(payload)
 
     @staticmethod
     def _critic_guidance(action_type: str) -> str:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 
 from PhyAgentOS.agent.context import ContextBuilder
@@ -154,6 +155,63 @@ def test_embodied_action_tool_rejects_when_action_file_already_pending(tmp_path:
     )
 
     assert "already contains pending action 'connect_robot'" in result
+
+
+def test_embodied_action_tool_allows_append_after_completed_history(tmp_path: Path) -> None:
+    registry = EmbodimentRegistry(_fleet_config(tmp_path))
+    registry.sync_layout()
+    shared = registry.resolve_agent_workspace()
+    robot_action = tmp_path / "workspaces" / "go2_edu_001" / "ACTION.md"
+    robot_action.write_text(
+        "```json\n{\n  \"schema_version\": \"PhyAgentOS.action_queue.v1\",\n  \"actions\": [\n    {\n      \"id\": \"done1\",\n      \"action_type\": \"connect_robot\",\n      \"parameters\": {\"robot_id\": \"go2_edu_001\"},\n      \"status\": \"completed\"\n    }\n  ]\n}\n```\n",
+        encoding="utf-8",
+    )
+
+    tool = EmbodiedActionTool(
+        workspace=shared,
+        provider=_FakeProvider(),
+        model="fake",
+        registry=registry,
+    )
+
+    result = asyncio.run(
+        tool.execute(
+            action_type="stop",
+            parameters={"robot_id": "go2_edu_001"},
+            reasoning="Need to stop the robot.",
+        )
+    )
+
+    payload = json.loads(robot_action.read_text(encoding="utf-8").split("```json\n", 1)[1].split("\n```", 1)[0])
+    assert "validated and dispatched" in result
+    assert len(payload["actions"]) == 2
+    assert payload["actions"][1]["status"] == "pending"
+
+
+def test_embodied_action_tool_rejects_invalid_action_file_content(tmp_path: Path) -> None:
+    registry = EmbodimentRegistry(_fleet_config(tmp_path))
+    registry.sync_layout()
+    shared = registry.resolve_agent_workspace()
+    robot_action = tmp_path / "workspaces" / "go2_edu_001" / "ACTION.md"
+    robot_action.write_text("broken content", encoding="utf-8")
+
+    tool = EmbodiedActionTool(
+        workspace=shared,
+        provider=_FakeProvider(),
+        model="fake",
+        registry=registry,
+    )
+
+    result = asyncio.run(
+        tool.execute(
+            action_type="stop",
+            parameters={"robot_id": "go2_edu_001"},
+            reasoning="Need to stop the robot.",
+        )
+    )
+
+    assert "contains unreadable content" in result
+    assert robot_action.read_text(encoding="utf-8") == "broken content"
 
 
 def test_registry_render_robot_index_reads_instance_specific_environment(tmp_path: Path) -> None:

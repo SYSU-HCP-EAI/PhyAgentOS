@@ -112,9 +112,10 @@ def test_target_navigation_writes_action_md(tmp_path: Path) -> None:
     )
 
     assert "validated and dispatched" in result
-    action_doc = (tmp_path / "ACTION.md").read_text(encoding="utf-8")
-    assert "target_navigation" in action_doc
-    assert '"target_label": "cup"' in action_doc
+    action_doc = json.loads((tmp_path / "ACTION.md").read_text(encoding="utf-8").split(_FENCE_OPEN, 1)[1].split(_FENCE_CLOSE, 1)[0])
+    assert action_doc["schema_version"] == "PhyAgentOS.action_queue.v1"
+    assert action_doc["actions"][0]["action_type"] == "target_navigation"
+    assert action_doc["actions"][0]["parameters"]["target_label"] == "cup"
     prompt = provider.messages[-1]["messages"][0]["content"]
     assert "do not require the target to already exist in the scene graph" in prompt
 
