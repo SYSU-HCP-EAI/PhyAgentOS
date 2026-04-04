@@ -79,8 +79,8 @@ PhyAgentOS's core is a local workspace where software and hardware operate as in
 
 ### 1. Install Dependencies
 ```bash
-git clone https://github.com/your-repo/Physical Agent Operating System.git
-cd Physical Agent Operating System
+git clone https://github.com/PhyAgentOS/PhyAgentOS.git
+cd PhyAgentOS
 pip install -e .
 # Install simulation dependencies (e.g., watchdog)
 pip install watchdog
