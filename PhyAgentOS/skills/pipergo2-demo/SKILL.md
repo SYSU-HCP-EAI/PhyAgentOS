@@ -1,16 +1,17 @@
 ---
 name: pipergo2-demo
-description: Deterministic demo mapping for open sim, go to desk, then pick red cube and return to spawn.
+description: Deterministic demo mapping for open sim, go to desk, rule-based pick+return, and VLA pick.
 metadata: {"PhyAgentOS":{"always":true},"nanobot":{"emoji":"🧪"}}
 ---
 
 # PiperGo2 Demo Skill
 
-This skill is a strict demo router for three sequential intents:
+This skill is a strict demo router for these sequential intents:
 
 1. `open simulation`
 2. `go to desk`
-3. `pick up the red cube and return to the starting position`
+3. `pick up the red cube and return to the starting position` (rule-based pick)
+4. `deploy a VLA to pick up the red cube` (SmolVLA closed-loop pick; no return)
 
 ## Preconditions
 
@@ -52,6 +53,29 @@ When user input semantically means picking the red cube then driving back to the
   - `reasoning`: short reason
 
 Post-pick navigation to **robot_home** is driven by driver-config `pick_place_defaults.navigate_after_pick_xy` (not a second tool call).
+
+### D) VLA Pick Up Red Cube (no return)
+
+When user input semantically means using a **VLA / SmolVLA / learned policy** to pick the red cube
+(examples: `deploy a vla to pick up the red cube`, `use the vla to pick the red cube`,
+`run the vla pick`, `vla pick the red cube`, `让 vla 抓红方块`, `用 vla 模型抓红色方块`):
+
+- call `execute_robot_action` **once** with:
+  - `action_type`: `run_vla_pick_and_return`
+  - `parameters`: `{}`
+  - `reasoning`: short reason
+
+Do **NOT** emit a separate `navigate_to_named` for the approach point. The handler is
+**self-contained**: it scoots to the cube approach pose from wherever the robot currently is, runs the SmolVLA
+closed-loop pick, force-closes the gripper, and **stops there** holding the cube. A prior "go to desk"
+is **not** required — the Critic must accept this action even when `robot_xy` is still at spawn / `robot_home`.
+
+Note: the action id ``run_vla_pick_and_return`` is kept for backward compatibility even though the handler no
+longer drives the robot back home after the pick.
+
+Distinguish D (VLA) from C (rule-based):
+- If the phrasing mentions `vla`, `smolvla`, `policy`, `learned`, `deploy a model`, `神经网络抓` → route to D.
+- Otherwise (no VLA keyword) → route to C.
 
 ## Demo Safety Rules
 
