@@ -1,92 +1,94 @@
-# PAOS Runtime Guide 
+# PAOS Simulation Environment Guide
 
-This guide only focuses on how to run the demo pipeline.
+> **English** | [中文](README_paos_env_zh.md)
 
-## 1) Install Isaac Sim 5.1 first
+This guide covers how to set up and run PhyAgentOS with simulation environments, including the built-in lightweight simulation and NVIDIA Isaac Sim 5.1.
 
-- Official download page (5.1.0):  
-  [https://docs.isaacsim.omniverse.nvidia.com/5.1.0/installation/download.html](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/installation/download.html)
-- Quick install doc (5.1.0):  
-  [https://docs.isaacsim.omniverse.nvidia.com/5.1.0/installation/quick-install.html](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/installation/quick-install.html)
+---
 
-## 2) Prepare Python environment
+## Table of Contents
+
+- [Built-in Simulation (Recommended for First-Time)](#built-in-simulation-recommended-for-first-time)
+- [Isaac Sim 5.1 Simulation](#isaac-sim-51-simulation)
+- [G1 Humanoid Simulation](#g1-humanoid-simulation)
+- [Multi-Robot Simulation](#multi-robot-simulation)
+- [Troubleshooting](#troubleshooting)
+
+---
+
+## Built-in Simulation (Recommended for First-Time)
+
+The built-in simulation requires no additional installation beyond `watchdog`:
+
+```bash
+pip install watchdog
+```
+
+### Quick Start
+
+```bash
+# Terminal 1: Start simulation watchdog
+python hal/hal_watchdog.py --driver simulation
+
+# Terminal 2: Start agent
+paos agent -m "look around the room"
+```
+
+### Supported Actions
+
+- `move_to`, `pick_up`, `put_down`, `push`, `grasp`, `stop`
+
+### Notes
+
+- Keep only one watchdog process running.
+- If the simulator is laggy, adjust `--interval` (default 0.05s = 20Hz).
+- If you modify driver or skill files, restart the watchdog.
+
+---
+
+## Isaac Sim 5.1 Simulation
+
+For high-fidelity physics simulation with visual rendering.
+
+### Prerequisites
+
+1. Install Isaac Sim 5.1.0:
+   - Download: [https://docs.isaacsim.omniverse.nvidia.com/5.1.0/installation/download.html](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/installation/download.html)
+   - Quick install: [https://docs.isaacsim.omniverse.nvidia.com/5.1.0/installation/quick-install.html](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/installation/quick-install.html)
+
+2. Prepare Python environment:
 
 ```bash
 conda activate paos
 ```
 
-## 3) Install required dependencies
-
-Install both local projects into the same `paos` environment:
+3. Install dependencies:
 
 ```bash
-cd /home/zyserver/work/PhyAgentOS
+cd /path/to/PhyAgentOS
 conda env create -f environment.yml
 pip install -e .
-
 ```
 
-## 4) Start HAL watchdog (GUI mode)
+### Start HAL Watchdog (GUI Mode)
 
 ```bash
-cd /home/zyserver/work/PhyAgentOS
+cd /path/to/PhyAgentOS
 conda activate paos
-python hal/hal_watchdog.py --gui --interval 0.05 --driver pipergo2_manipulation --driver-config examples/pipergo2_manipulation_driver.json
+python hal/hal_watchdog.py \
+  --gui \
+  --interval 0.05 \
+  --driver pipergo2_manipulation \
+  --driver-config examples/pipergo2_manipulation_driver.json
 ```
 
-## 4b) Start HAL watchdog (VNC mode, for containers without local X)
-
-Use this mode when you are **SSHed into a remote server** (or running inside
-a container) that has **no local display / GUI**, but you still want to
-visualize the Isaac Sim window from your local machine through a browser.
-You can also refer to the Isaac Sim official livestream guide for
-alternative approaches:
-[Manual Livestream Clients (Isaac Sim 4.5.0 docs)](https://docs.isaacsim.omniverse.nvidia.com/4.5.0/installation/manual_livestream_clients.html).
-
-```bash
-cd /home/zyserver/work/PhyAgentOS
-conda activate paos
-python hal/hal_watchdog.py --vnc --interval 0.05 --driver pipergo2_manipulation --driver-config examples/pipergo2_manipulation_driver.json
-```
-
-Then open a browser at `http://<host>:31315/vnc.html` to see the Isaac Sim
-window. Here `31315` is the **VNC web (noVNC) visualization port** exposed
-by the watchdog; replace `<host>` with your server's IP / hostname. If the
-port is occupied or blocked, adjust the port mapping in your container /
-firewall accordingly.
-
-Notes:
-- `--vnc` auto-bootstraps Isaac Sim env **inside the Python process** using the
-  `isaac_env` block of the driver-config JSON: sets `DISPLAY` (defaults to
-  `:99`), injects `ISAAC_PATH` / `CARB_APP_PATH` / `EXP_PATH` /
-  `INTERNUTOPIA_ASSETS_PATH`, sources `setup_python_env.sh`, and prepends
-  `extra_pythonpath` to both `PYTHONPATH` and `sys.path`. Users no longer need
-  to wrap the command in a shell script that `source`s those vars.
-- `--gui` and `--vnc` are mutually exclusive. Without either flag the
-  watchdog runs headless.
-- On first start in `--vnc` mode the watchdog **re-execs itself once**
-  (`[isaac-bootstrap] LD_LIBRARY_PATH changed; re-exec ...` →
-  `[isaac-bootstrap] post-reexec ready ...`). This is required because
-  glibc's dynamic loader caches `LD_LIBRARY_PATH` at process start, so
-  `libcarb.so` / `isaacsim` imports only succeed after the process is
-  restarted with the environment sourced from `setup_python_env.sh`.
-- Customize the Isaac Sim / InternUtopia paths in
-  `examples/pipergo2_manipulation_driver.json` under the `isaac_env` key.
-
-## 5) Send PAOS agent commands
+### Send PAOS Agent Commands
 
 Open another terminal:
 
 ```bash
-cd /home/zyserver/work/PhyAgentOS
+cd /path/to/PhyAgentOS
 conda activate paos
-```
-
-Then run commands in order.
-
-First, bring up the simulation:
-
-```bash
 paos agent -m "open simulation"
 ```
 
@@ -98,22 +100,65 @@ paos agent -m "go to desk"
 paos agent -m "pick up the red cube and return to the starting position"
 ```
 
-Alternatively, you can deploy a **VLA (Vision-Language-Action) model** to
-run the pick task end-to-end. The robot drives to the cube's approach
-pose, the VLA closes the loop on the grasp, the gripper is force-closed,
-and the robot **stops there** holding the cube (no auto-return to the
-starting position). The example below is the reference command using `smolvla-piper` model:
+### Isaac Sim Configuration Files
+
+| File | Purpose |
+|---|---|
+| `examples/pipergo2_manipulation_driver.json` | PIPER + Go2 manipulation config |
+| `examples/franka_simulation_driver.json` | Franka simulation config |
+| `examples/g1_simulation_driver.json` | G1 humanoid simulation config |
+| `examples/multi_robot_simulation_internutopia_driver.json` | Multi-robot scene config |
+
+---
+
+## G1 Humanoid Simulation
 
 ```bash
-paos agent -m "deploy a VLA to pick up the red cube"
+python hal/hal_watchdog.py --driver g1_simulation
 ```
 
-Users are free to plug in their own VLA checkpoint by editing the `vla`
-block of `examples/pipergo2_manipulation_driver.json` (update `ckpt_path`,
-`policy_type`, camera keys, etc.) before running the command above.
+See `examples/g1_simulation_driver.json` for configuration options.
 
-## 6) Notes
+---
 
-- Keep only one watchdog process running.
-- If you modify driver or skill files, restart watchdog.
-- If the simulator is laggy, make sure `--interval 0.05` is used.
+## Multi-Robot Simulation
+
+To run multiple robots in the same Isaac Sim scene:
+
+```bash
+# Example: Piper + Go2 + Franka in one scene
+python hal/hal_watchdog.py \
+  --driver multi_robot_simulation \
+  --driver-config examples/pipergo2_franka_same_scene_internutopia_config.json
+```
+
+For fleet mode with separate workspaces per robot, see [Fleet Mode Guide](user_manual/03_FLEET_MODE.md).
+
+---
+
+## Troubleshooting
+
+### Isaac Sim not found
+
+- Confirm Isaac Sim 5.1 is installed and the `isaacsim` package is in your Python path
+- Try: `python -c "import isaacsim; print(isaacsim.__version__)"`
+
+### GUI mode fails
+
+- Check GPU driver and CUDA compatibility
+- Try without `--gui` for headless mode
+- Check Isaac Sim logs for rendering errors
+
+### Actions not executing in simulation
+
+- Confirm only one watchdog is running
+- Check `--interval` is set appropriately (0.05 for 20Hz)
+- Verify the driver config JSON points to a valid scene file (`.usd`)
+
+---
+
+## Next Steps
+
+- [User Manual: Basic Usage](user_manual/02_BASIC_USAGE.md) for general commands
+- [Embodiments Guide](user_manual/04_EMBODIMENTS.md) for connecting real robots
+- [Plugin Development Guide](user_development_guide/PLUGIN_DEVELOPMENT_GUIDE.md) for adding new simulation backends

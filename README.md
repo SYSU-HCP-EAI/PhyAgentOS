@@ -133,9 +133,13 @@ To auto-onboard a new robot into `PhyAgentOS-rekep-real-plugin` with the built-i
 
 ### 5. More Information
 
-[User Manual](docs/user_manual/README.md): Operations guide for end users, integrators, and demo operators.
+[Documentation Hub](docs/README.md): Complete documentation map with reading paths by role.
 
-[Development Guide](docs/user_development_guide/README.md): Layered guide for secondary developers, hardware integrators, plugin authors, and maintainers.
+[User Manual](docs/user_manual/README.md): Installation, basic usage, fleet mode, and per-robot embodiment guides.
+
+[Development Guide](docs/user_development_guide/README.md): Communication architecture, plugin development, HAL drivers, perception, and ROS2 integration.
+
+[Simulation Guide](docs/README_paos_env.md): Built-in simulation and Isaac Sim 5.1 setup.
 
 ## 📁 Project Structure
 

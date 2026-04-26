@@ -142,9 +142,13 @@ paos agent
 
 ### 5. 更多信息
 
-[用户手册](docs/user_manual/README.md)：面向使用者、集成者与演示操作者的运行手册。
+[文档中心](docs/README_zh.md)：完整的文档地图，按角色提供阅读路径。
 
-[开发手册](docs/user_development_guide/README.md)：面向二次开发者、硬件接入者、插件作者与维护者的分层手册。
+[用户手册](docs/user_manual/README_zh.md)：安装、基础使用、Fleet 模式与各本体接入指南。
+
+[开发手册](docs/user_development_guide/README_zh.md)：通信架构、插件开发、HAL 驱动、感知导航与 ROS2 集成。
+
+[仿真指南](docs/README_paos_env_zh.md)：内置仿真与 Isaac Sim 5.1 环境搭建。
 
 
 ## 📁 Project Structure
